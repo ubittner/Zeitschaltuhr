@@ -1,0 +1,15 @@
+{
+    "id": "{68424ADC-725A-77E8-F63E-01DA08C6E30F}",
+    "name": "Zeitschaltuhr",
+    "type": 3,
+    "vendor": "Ulrich Bittner",
+    "aliases": 
+    [
+        "Zeitschaltuhr"
+    ],
+    "url": "https://github.com/ubittner/Zeitschaltuhr/tree/main/Zeitschaltuhr",
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "UBZSU"
+}

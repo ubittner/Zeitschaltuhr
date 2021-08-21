@@ -1,0 +1,12 @@
+{
+    "id": "{60355992-647F-0632-B9F2-01C93B62ED19}",
+    "author": "Ulrich Bittner",
+    "name": "Zeitschaltuhr",
+    "url": "https://github.com/ubittner/Zeitschaltuhr",
+    "compatibility": {
+        "version": "5.5"
+    },
+    "version": "1.0",
+    "build": 1,
+    "date": 1629537319
+}
