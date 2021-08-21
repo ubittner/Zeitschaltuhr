@@ -33,7 +33,6 @@ trait ZSU_isItDay
                 $toggleAction = boolval($this->ReadPropertyInteger('IsItDayToggleAction'));
             }
             $this->ToggleState($toggleAction);
-            $this->SetNextToggleTime();
         }
     }
 }

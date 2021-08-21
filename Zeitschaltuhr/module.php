@@ -163,7 +163,6 @@ class Zeitschaltuhr extends IPSModule
             }
         }
         $this->SetActualState();
-        $this->SetNextToggleTime();
     }
 
     public function Destroy()
@@ -604,6 +603,7 @@ class Zeitschaltuhr extends IPSModule
         $this->CheckSunrise();
         $this->CheckSunset();
         $this->ExecuteIsItDayAction();
+        $this->SetNextToggleTime();
     }
 
     #################### Request action
@@ -614,7 +614,6 @@ class Zeitschaltuhr extends IPSModule
             case 'AutomaticMode':
                 $this->SetValue($Ident, $Value);
                 $this->SetActualState();
-                $this->SetNextToggleTime();
                 break;
         }
     }
@@ -829,5 +828,6 @@ class Zeitschaltuhr extends IPSModule
         if ($id != 0 && @IPS_ObjectExists($id)) {
             RequestAction($id, $State);
         }
+        $this->SetNextToggleTime();
     }
 }

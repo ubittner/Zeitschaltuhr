@@ -89,7 +89,6 @@ trait ZSU_scheduleAction
                 $this->ToggleState($state);
             }
         }
-        $this->SetNextToggleTime();
     }
 
     #################### Private

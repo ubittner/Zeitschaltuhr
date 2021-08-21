@@ -61,7 +61,6 @@ trait ZSU_sunrise
                     if ($sunset < $sunrise) {
                         $this->SendDebug(__FUNCTION__, 'Es ist Sonnenaufgang.', 0);
                         $this->ExecuteSunriseAction();
-                        $this->SetNextToggleTime();
                     }
                 }
             }
