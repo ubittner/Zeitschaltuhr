@@ -1,18 +1,25 @@
 <?php
 
-/** @noinspection PhpUnused */
-
-/*
- * @author      Ulrich Bittner
- * @copyright   (c) 2021
- * @license     CC BY-NC-SA 4.0
- * @see         https://github.com/ubittner/Zeitschaltuhr/tree/main/Zeitschaltuhr
+/**
+ * @project       Zeitschaltuhr/Zeitschaltuhr
+ * @file          ZSU_ScheduleAction.php
+ * @author        Ulrich Bittner
+ * @copyright     2022 Ulrich Bittner
+ * @license       https://creativecommons.org/licenses/by-nc-sa/4.0/ CC BY-NC-SA 4.0
  */
+
+/** @noinspection PhpUnused */
 
 declare(strict_types=1);
 
-trait ZSU_scheduleAction
+trait ZSU_ScheduleAction
 {
+    /**
+     * Shows the actual action of the scheduled action
+     *
+     * @return void
+     * @throws Exception
+     */
     public function ShowActualScheduleAction(): void
     {
         $warning = json_decode('"\u26a0\ufe0f"') . "\tFehler\n\n";
@@ -32,7 +39,6 @@ trait ZSU_scheduleAction
             } else {
                 $actionID = $this->DetermineActionID();
                 $actionName = $warning . 'Es wurde keine Aktion gefunden!';
-                $event = IPS_GetEvent($id);
                 foreach ($event['ScheduleActions'] as $action) {
                     if ($action['ID'] === $actionID) {
                         $actionName = json_decode('"\u2705"') . "\tAktuelle Aktion\n\nID " . $actionID . ' = ' . $action['Name'];
@@ -43,9 +49,15 @@ trait ZSU_scheduleAction
         }
     }
 
+    /**
+     * Executes the action of the scheduled action
+     *
+     * @return void
+     * @throws Exception
+     */
     public function ExecuteScheduleAction(): void
     {
-        if ($this->CheckMaintenanceMode()) {
+        if ($this->CheckMaintenance()) {
             return;
         }
         if (!$this->CheckAutomaticMode()) {
@@ -93,6 +105,14 @@ trait ZSU_scheduleAction
 
     #################### Private
 
+    /**
+     * Determines the action id of a scheduled action
+     *
+     * @return int
+     * n =  Action ID
+     *
+     * @throws Exception
+     */
     private function DetermineActionID(): int
     {
         $actionID = 0;

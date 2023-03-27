@@ -1,21 +1,28 @@
 <?php
 
-/** @noinspection PhpUnused */
-
-/*
- * @author      Ulrich Bittner
- * @copyright   (c) 2021
- * @license     CC BY-NC-SA 4.0
- * @see         https://github.com/ubittner/Zeitschaltuhr/tree/main/Zeitschaltuhr
+/**
+ * @project       Zeitschaltuhr/Zeitschaltuhr
+ * @file          ZSU_IsItDay.php
+ * @author        Ulrich Bittner
+ * @copyright     2022 Ulrich Bittner
+ * @license       https://creativecommons.org/licenses/by-nc-sa/4.0/ CC BY-NC-SA 4.0
  */
+
+/** @noinspection PhpUnused */
 
 declare(strict_types=1);
 
-trait ZSU_isItDay
+trait ZSU_IsItDay
 {
+    /**
+     * Executes the is it day action.
+     *
+     * @return void
+     * @throws Exception
+     */
     public function ExecuteIsItDayAction(): void
     {
-        if ($this->CheckMaintenanceMode()) {
+        if ($this->CheckMaintenance()) {
             return;
         }
         if (!$this->CheckAutomaticMode()) {
@@ -28,11 +35,15 @@ trait ZSU_isItDay
         $id = $this->ReadPropertyInteger('IsItDay');
         if ($id != 0 && @IPS_ObjectExists($id)) {
             $this->SendDebug(__FUNCTION__, 'Ist es Tag hat ausgelöst.', 0);
-            $toggleAction = !boolval($this->ReadPropertyInteger('IsItDayToggleAction'));
+            $toggleAction = !$this->ReadPropertyInteger('IsItDayToggleAction');
             if (GetValueBoolean($id)) {
-                $toggleAction = boolval($this->ReadPropertyInteger('IsItDayToggleAction'));
+                $toggleAction = $this->ReadPropertyInteger('IsItDayToggleAction');
             }
-            $this->ToggleState($toggleAction);
+            $state = false;
+            if ($toggleAction == 1) {
+                $state = true;
+            }
+            $this->ToggleState($state);
         }
     }
 }

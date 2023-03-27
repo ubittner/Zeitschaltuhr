@@ -1,60 +1,92 @@
 <?php
 
-/** @noinspection PhpUnused */
-
-/*
- * @author      Ulrich Bittner
- * @copyright   (c) 2021
- * @license     CC BY-NC-SA 4.0
- * @see         https://github.com/ubittner/Zeitschaltuhr/tree/main/Zeitschaltuhr
+/**
+ * @project       Zeitschaltuhr/Zeitschaltuhr
+ * @file          module.php
+ * @author        Ulrich Bittner
+ * @copyright     2022 Ulrich Bittner
+ * @license       https://creativecommons.org/licenses/by-nc-sa/4.0/ CC BY-NC-SA 4.0
  */
+
+/** @noinspection PhpUnhandledExceptionInspection */
+/** @noinspection PhpUnused */
 
 declare(strict_types=1);
 
-include_once __DIR__ . '/helper/autoload.php';
+include_once __DIR__ . '/helper/ZSU_autoload.php';
 
 class Zeitschaltuhr extends IPSModule
 {
     //Helper
-    use ZSU_backupRestore;
-    use ZSU_isItDay;
-    use ZSU_scheduleAction;
-    use ZSU_sunrise;
-    use ZSU_sunset;
+    use ZSU_IsItDay;
+    use ZSU_Config;
+    use ZSU_ScheduleAction;
+    use ZSU_Sunrise;
+    use ZSU_Sunset;
 
     //Constants
-    private const LIBRARY_GUID = '{60355992-647F-0632-B9F2-01C93B62ED19}';
     private const MODULE_NAME = 'Zeitschaltuhr';
-    private const MODULE_PREFIX = 'UBZSU';
+    private const MODULE_PREFIX = 'ZSU';
+    private const MODULE_VERSION = '1.0-2, 27.03.2023';
+    private const ABLAUFSTEUERUNG_MODULE_GUID = '{0559B287-1052-A73E-B834-EBD9B62CB938}';
+    private const ABLAUFSTEUERUNG_MODULE_PREFIX = 'AST';
 
     public function Create()
     {
         //Never delete this line!
         parent::Create();
 
-        //Properties
-        $this->RegisterPropertyBoolean('MaintenanceMode', false);
-        $this->RegisterPropertyBoolean('EnableAutomaticMode', true);
-        $this->RegisterPropertyBoolean('EnableSwitchingState', true);
-        $this->RegisterPropertyBoolean('EnableNextToggleTime', true);
+        ########## Properties
+
+        ##### Info
+        $this->RegisterPropertyString('Note', '');
+
+        ##### Schedule Action
         $this->RegisterPropertyBoolean('UseScheduleAction', false);
         $this->RegisterPropertyInteger('ScheduleAction', 0);
         $this->RegisterPropertyInteger('ScheduleActionToggleActionID1', 0);
         $this->RegisterPropertyInteger('ScheduleActionToggleActionID2', 1);
+
+        ##### Sunrise
         $this->RegisterPropertyBoolean('UseSunrise', false);
         $this->RegisterPropertyInteger('Sunrise', 0);
         $this->RegisterPropertyInteger('SunriseToggleAction', 0);
+
+        ##### Sunset
         $this->RegisterPropertyBoolean('UseSunset', false);
         $this->RegisterPropertyInteger('Sunset', 0);
         $this->RegisterPropertyInteger('SunsetToggleAction', 1);
+
+        ##### Is it day
         $this->RegisterPropertyBoolean('UseIsItDay', false);
         $this->RegisterPropertyInteger('IsItDay', 0);
         $this->RegisterPropertyInteger('IsItDayToggleAction', 0);
         $this->RegisterPropertyInteger('StartOfDay', 0);
         $this->RegisterPropertyInteger('EndOfDay', 0);
+
+        ##### Target
         $this->RegisterPropertyInteger('TargetVariable', 0);
 
-        //Variables
+        ##### Command control
+        $this->RegisterPropertyInteger('CommandControl', 0);
+
+        ##### Visualisation
+        $this->RegisterPropertyBoolean('EnableActive', false);
+        $this->RegisterPropertyBoolean('EnableAutomaticMode', true);
+        $this->RegisterPropertyBoolean('EnableSwitchingState', true);
+        $this->RegisterPropertyBoolean('EnableNextToggleTime', true);
+
+        ########## Variables
+
+        //Active
+        $id = @$this->GetIDForIdent('Active');
+        $this->RegisterVariableBoolean('Active', 'Aktiv', '~Switch', 10);
+        $this->EnableAction('Active');
+        if (!$id) {
+            $this->SetValue('Active', true);
+        }
+
+        //Automatic mode
         $profile = self::MODULE_PREFIX . '.' . $this->InstanceID . '.AutomaticMode';
         if (!IPS_VariableProfileExists($profile)) {
             IPS_CreateVariableProfile($profile, 0);
@@ -63,11 +95,13 @@ class Zeitschaltuhr extends IPSModule
         IPS_SetVariableProfileAssociation($profile, 0, 'Aus', '', -1);
         IPS_SetVariableProfileAssociation($profile, 1, 'An', '', 0x00FF00);
         $id = @$this->GetIDForIdent('AutomaticMode');
-        $this->RegisterVariableBoolean('AutomaticMode', 'Automatik', $profile, 10);
+        $this->RegisterVariableBoolean('AutomaticMode', 'Automatik', $profile, 20);
         $this->EnableAction('AutomaticMode');
-        if ($id == false) {
+        if (!$id) {
             $this->SetValue('AutomaticMode', true);
         }
+
+        //Switching state
         $profile = self::MODULE_PREFIX . '.' . $this->InstanceID . '.SwitchingState';
         if (!IPS_VariableProfileExists($profile)) {
             IPS_CreateVariableProfile($profile, 0);
@@ -75,10 +109,12 @@ class Zeitschaltuhr extends IPSModule
         IPS_SetVariableProfileIcon($profile, 'Power');
         IPS_SetVariableProfileAssociation($profile, 0, 'Aus', '', -1);
         IPS_SetVariableProfileAssociation($profile, 1, 'An', '', 0x00FF00);
-        $this->RegisterVariableBoolean('SwitchingState', 'Schaltzustand', $profile, 20);
+        $this->RegisterVariableBoolean('SwitchingState', 'Schaltzustand', $profile, 30);
+
+        //Next toggle time
         $id = @$this->GetIDForIdent('NextToggleTime');
-        $this->RegisterVariableString('NextToggleTime', 'Nächster Schaltvorgang', '', 30);
-        if ($id == false) {
+        $this->RegisterVariableString('NextToggleTime', 'Nächster Schaltvorgang', '', 40);
+        if (!$id) {
             IPS_SetIcon(@$this->GetIDForIdent('NextToggleTime'), 'Calendar');
         }
     }
@@ -96,7 +132,56 @@ class Zeitschaltuhr extends IPSModule
             return;
         }
 
-        //Set options
+        //Delete all references
+        foreach ($this->GetReferenceList() as $referenceID) {
+            $this->UnregisterReference($referenceID);
+        }
+
+        //Delete all update messages
+        foreach ($this->GetMessageList() as $senderID => $messages) {
+            foreach ($messages as $message) {
+                if ($message == VM_UPDATE) {
+                    $this->UnregisterMessage($senderID, VM_UPDATE);
+                }
+            }
+        }
+
+        //Register references and update messages
+        //Schedule action
+        if ($this->ReadPropertyBoolean('UseScheduleAction')) {
+            $id = $this->ReadPropertyInteger('ScheduleAction');
+            if ($id != 0 && @IPS_ObjectExists($id)) {
+                $this->RegisterReference($id);
+                $this->RegisterMessage($id, EM_UPDATE);
+            }
+        }
+        //Sunrise
+        if ($this->ReadPropertyBoolean('UseSunrise')) {
+            $id = $this->ReadPropertyInteger('Sunrise');
+            if ($id != 0 && @IPS_ObjectExists($id)) {
+                $this->RegisterReference($id);
+                $this->RegisterMessage($id, VM_UPDATE);
+            }
+        }
+        //Sunset
+        if ($this->ReadPropertyBoolean('UseSunset')) {
+            $id = $this->ReadPropertyInteger('Sunset');
+            if ($id != 0 && @IPS_ObjectExists($id)) {
+                $this->RegisterReference($id);
+                $this->RegisterMessage($id, VM_UPDATE);
+            }
+        }
+        //Is it day
+        if ($this->ReadPropertyBoolean('UseIsItDay')) {
+            $id = $this->ReadPropertyInteger('IsItDay');
+            if ($id != 0 && @IPS_ObjectExists($id)) {
+                $this->RegisterReference($id);
+                $this->RegisterMessage($id, VM_UPDATE);
+            }
+        }
+
+        //WebFront options
+        IPS_SetHidden($this->GetIDForIdent('Active'), !$this->ReadPropertyBoolean('EnableActive'));
         IPS_SetHidden($this->GetIDForIdent('AutomaticMode'), !$this->ReadPropertyBoolean('EnableAutomaticMode'));
         IPS_SetHidden($this->GetIDForIdent('SwitchingState'), !$this->ReadPropertyBoolean('EnableSwitchingState'));
         IPS_SetHidden($this->GetIDForIdent('NextToggleTime'), !$this->ReadPropertyBoolean('EnableNextToggleTime'));
@@ -104,64 +189,11 @@ class Zeitschaltuhr extends IPSModule
         //Reset buffer
         $this->SetBuffer('LastMessage', json_encode([]));
 
-        //Delete all references
-        foreach ($this->GetReferenceList() as $referenceID) {
-            $this->UnregisterReference($referenceID);
-        }
-
-        //Delete all registrations
-        foreach ($this->GetMessageList() as $senderID => $messages) {
-            foreach ($messages as $message) {
-                if ($message == VM_UPDATE) {
-                    $this->UnregisterMessage($senderID, VM_UPDATE);
-                }
-                if ($message == EM_UPDATE) {
-                    $this->UnregisterMessage($senderID, EM_UPDATE);
-                }
-            }
-        }
-
         //Validate configuration
         if (!$this->ValidateConfiguration()) {
             return;
         }
 
-        //Add registrations
-        if (!$this->CheckMaintenanceMode()) {
-            $this->SendDebug(__FUNCTION__, 'Referenzen und Nachrichten werden registriert.', 0);
-            //Schedule action
-            if ($this->ReadPropertyBoolean('UseScheduleAction')) {
-                $id = $this->ReadPropertyInteger('ScheduleAction');
-                if ($id != 0 && @IPS_ObjectExists($id)) {
-                    $this->RegisterReference($id);
-                    $this->RegisterMessage($id, EM_UPDATE);
-                }
-            }
-            //Sunrise
-            if ($this->ReadPropertyBoolean('UseSunrise')) {
-                $id = $this->ReadPropertyInteger('Sunrise');
-                if ($id != 0 && @IPS_ObjectExists($id)) {
-                    $this->RegisterReference($id);
-                    $this->RegisterMessage($id, VM_UPDATE);
-                }
-            }
-            //Sunset
-            if ($this->ReadPropertyBoolean('UseSunset')) {
-                $id = $this->ReadPropertyInteger('Sunset');
-                if ($id != 0 && @IPS_ObjectExists($id)) {
-                    $this->RegisterReference($id);
-                    $this->RegisterMessage($id, VM_UPDATE);
-                }
-            }
-            //Is it day
-            if ($this->ReadPropertyBoolean('UseIsItDay')) {
-                $id = $this->ReadPropertyInteger('IsItDay');
-                if ($id != 0 && @IPS_ObjectExists($id)) {
-                    $this->RegisterReference($id);
-                    $this->RegisterMessage($id, VM_UPDATE);
-                }
-            }
-        }
         $this->SetActualState();
     }
 
@@ -175,9 +207,7 @@ class Zeitschaltuhr extends IPSModule
         if (!empty($profiles)) {
             foreach ($profiles as $profile) {
                 $profileName = self::MODULE_PREFIX . '.' . $this->InstanceID . '.' . $profile;
-                if (@IPS_VariableProfileExists($profileName)) {
-                    IPS_DeleteVariableProfile($profileName);
-                }
+                $this->UnregisterProfile($profileName);
             }
         }
     }
@@ -248,354 +278,6 @@ class Zeitschaltuhr extends IPSModule
         }
     }
 
-    public function GetConfigurationForm()
-    {
-        $form = [];
-
-        #################### Elements
-
-        ##### Functions panel
-
-        $form['elements'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Funktionen',
-            'items'   => [
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'MaintenanceMode',
-                    'caption' => 'Wartungsmodus'
-                ],
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'EnableAutomaticMode',
-                    'caption' => 'Automatik'
-                ],
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'EnableSwitchingState',
-                    'caption' => 'Schaltzustand'
-                ],
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'EnableNextToggleTime',
-                    'caption' => 'Nächster Schaltvorgang'
-                ]
-            ]
-        ];
-
-        ########## Schedule action panel
-
-        $form['elements'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Wochenplan',
-            'items'   => [
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'UseScheduleAction',
-                    'caption' => 'Wochenplan'
-                ],
-                [
-                    'type'    => 'SelectEvent',
-                    'name'    => 'ScheduleAction',
-                    'caption' => 'Wochenplan',
-                    'width'   => '600px'
-                ],
-                [
-                    'type'    => 'Select',
-                    'name'    => 'ScheduleActionToggleActionID1',
-                    'caption' => 'Schaltvorgang für die Aktion ID 1',
-                    'options' => [
-                        [
-                            'caption' => 'Ausschalten',
-                            'value'   => 0
-                        ],
-                        [
-                            'caption' => 'Einschalten',
-                            'value'   => 1
-                        ]
-                    ]
-                ],
-                [
-                    'type'    => 'Select',
-                    'name'    => 'ScheduleActionToggleActionID2',
-                    'caption' => 'Schaltvorgang für die Aktion ID 2',
-                    'options' => [
-                        [
-                            'caption' => 'Ausschalten',
-                            'value'   => 0
-                        ],
-                        [
-                            'caption' => 'Einschalten',
-                            'value'   => 1
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        ########## Sunrise panel
-
-        $form['elements'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Sonnenaufgang',
-            'items'   => [
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'UseSunrise',
-                    'caption' => 'Sonnenaufgang'
-                ],
-                [
-                    'type'    => 'SelectVariable',
-                    'name'    => 'Sunrise',
-                    'caption' => 'Sonnenaufgang',
-                    'width'   => '600px'
-                ],
-                [
-                    'type'    => 'Select',
-                    'name'    => 'SunriseToggleAction',
-                    'caption' => 'Schaltvorgang',
-                    'options' => [
-                        [
-                            'caption' => 'Ausschalten',
-                            'value'   => 0
-                        ],
-                        [
-                            'caption' => 'Einschalten',
-                            'value'   => 1
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        ########## Sunset panel
-
-        $form['elements'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Sonnenuntergang',
-            'items'   => [
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'UseSunset',
-                    'caption' => 'Sonnenuntergang'
-                ],
-                [
-                    'type'    => 'SelectVariable',
-                    'name'    => 'Sunset',
-                    'caption' => 'Sonnenuntergang',
-                    'width'   => '600px'
-                ],
-                [
-                    'type'    => 'Select',
-                    'name'    => 'SunsetToggleAction',
-                    'caption' => 'Schaltvorgang',
-                    'options' => [
-                        [
-                            'caption' => 'Ausschalten',
-                            'value'   => 0
-                        ],
-                        [
-                            'caption' => 'Einschalten',
-                            'value'   => 1
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        ########## Is day panel
-
-        $form['elements'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Ist es Tag',
-            'items'   => [
-                [
-                    'type'    => 'CheckBox',
-                    'name'    => 'UseIsItDay',
-                    'caption' => 'Ist es Tag'
-                ],
-                [
-                    'type'    => 'SelectVariable',
-                    'name'    => 'IsItDay',
-                    'caption' => 'Ist es Tag',
-                    'width'   => '600px'
-                ],
-                [
-                    'type'    => 'Select',
-                    'name'    => 'IsItDayToggleAction',
-                    'caption' => 'Schaltvorgang',
-                    'options' => [
-                        [
-                            'caption' => 'Ausschalten',
-                            'value'   => 0
-                        ],
-                        [
-                            'caption' => 'Einschalten',
-                            'value'   => 1
-                        ]
-                    ]
-                ],
-                [
-                    'type'    => 'SelectVariable',
-                    'name'    => 'StartOfDay',
-                    'caption' => 'Tagesanfang',
-                    'width'   => '600px'
-                ],
-                [
-                    'type'    => 'SelectVariable',
-                    'name'    => 'EndOfDay',
-                    'caption' => 'Tagesende',
-                    'width'   => '600px'
-                ]
-            ]
-        ];
-
-        ########## Target
-
-        $form['elements'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Ziel',
-            'items'   => [
-                [
-                    'type'    => 'SelectVariable',
-                    'name'    => 'TargetVariable',
-                    'caption' => 'Variable',
-                    'width'   => '600px'
-                ]
-            ]
-        ];
-
-        #################### Actions
-
-        ##### Configuration panel
-
-        $form['actions'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Konfiguration',
-            'items'   => [
-                [
-                    'type'    => 'Button',
-                    'caption' => 'Neu einlesen',
-                    'onClick' => self::MODULE_PREFIX . '_ReloadConfiguration($id);'
-                ],
-                [
-                    'type'  => 'RowLayout',
-                    'items' => [
-                        [
-                            'type'    => 'SelectCategory',
-                            'name'    => 'BackupCategory',
-                            'caption' => 'Kategorie',
-                            'width'   => '600px'
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => ' '
-                        ],
-                        [
-                            'type'    => 'Button',
-                            'caption' => 'Sichern',
-                            'onClick' => self::MODULE_PREFIX . '_CreateBackup($id, $BackupCategory);'
-                        ]
-                    ]
-                ],
-                [
-                    'type'  => 'RowLayout',
-                    'items' => [
-                        [
-                            'type'    => 'SelectScript',
-                            'name'    => 'ConfigurationScript',
-                            'caption' => 'Konfiguration',
-                            'width'   => '600px'
-                        ],
-                        [
-                            'type'    => 'Label',
-                            'caption' => ' '
-                        ],
-                        [
-                            'type'    => 'PopupButton',
-                            'caption' => 'Wiederherstellen',
-                            'popup'   => [
-                                'caption' => 'Konfiguration wirklich wiederherstellen?',
-                                'items'   => [
-                                    [
-                                        'type'    => 'Button',
-                                        'caption' => 'Wiederherstellen',
-                                        'onClick' => self::MODULE_PREFIX . '_RestoreConfiguration($id, $ConfigurationScript);'
-                                    ]
-                                ]
-                            ]
-                        ]
-                    ]
-                ]
-            ]
-        ];
-
-        ##### Schedule action
-
-        $form['actions'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Wochenplan',
-            'items'   => [
-                [
-                    'type'    => 'Button',
-                    'caption' => 'Aktuelle Aktion anzeigen',
-                    'onClick' => 'UBZSU_ShowActualScheduleAction($id);'
-                ]
-            ]
-        ];
-
-        ##### Test center panel
-
-        $form['actions'][] = [
-            'type'    => 'ExpansionPanel',
-            'caption' => 'Schaltfunktion',
-            'items'   => [
-                [
-                    'type' => 'TestCenter',
-                ]
-            ]
-        ];
-
-        #################### Status
-
-        $library = IPS_GetLibrary(self::LIBRARY_GUID);
-        $version = '[Version ' . $library['Version'] . '-' . $library['Build'] . ' vom ' . date('d.m.Y', $library['Date']) . ']';
-
-        $form['status'] = [
-            [
-                'code'    => 101,
-                'icon'    => 'active',
-                'caption' => self::MODULE_NAME . ' wird erstellt',
-            ],
-            [
-                'code'    => 102,
-                'icon'    => 'active',
-                'caption' => self::MODULE_NAME . ' ist aktiv (ID ' . $this->InstanceID . ') ' . $version,
-            ],
-            [
-                'code'    => 103,
-                'icon'    => 'active',
-                'caption' => self::MODULE_NAME . ' wird gelöscht (ID ' . $this->InstanceID . ') ' . $version,
-            ],
-            [
-                'code'    => 104,
-                'icon'    => 'inactive',
-                'caption' => self::MODULE_NAME . ' ist inaktiv (ID ' . $this->InstanceID . ') ' . $version,
-            ],
-            [
-                'code'    => 200,
-                'icon'    => 'inactive',
-                'caption' => 'Es ist Fehler aufgetreten, weitere Informationen unter Meldungen, im Log oder Debug! (ID ' . $this->InstanceID . ') ' . $version
-            ]
-        ];
-        return json_encode($form);
-    }
-
-    public function ReloadConfiguration()
-    {
-        $this->ReloadForm();
-    }
-
     public function SetActualState(): void
     {
         $this->SendDebug(__FUNCTION__, 'Der aktuelle Status wird ermittelt.', 0);
@@ -606,11 +288,27 @@ class Zeitschaltuhr extends IPSModule
         $this->SetNextToggleTime();
     }
 
+    public function CreateEvent(): void
+    {
+        $id = IPS_CreateEvent(2);
+        if (is_int($id)) {
+            IPS_SetName($id, 'Ablaufsteuerung');
+            echo 'Instanz mit der ID ' . $id . ' wurde erfolgreich erstellt!';
+        } else {
+            echo 'Instanz konnte nicht erstellt werden!';
+        }
+    }
+
     #################### Request action
 
     public function RequestAction($Ident, $Value)
     {
         switch ($Ident) {
+
+            case 'Active':
+                $this->SetValue($Ident, $Value);
+                break;
+
             case 'AutomaticMode':
                 $this->SetValue($Ident, $Value);
                 $this->SetActualState();
@@ -731,6 +429,33 @@ class Zeitschaltuhr extends IPSModule
         $this->ApplyChanges();
     }
 
+    private function UnregisterProfile(string $Name): void
+    {
+        if (!IPS_VariableProfileExists($Name)) {
+            return;
+        }
+        foreach (IPS_GetVariableList() as $VarID) {
+            if (IPS_GetParent($VarID) == $this->InstanceID) {
+                continue;
+            }
+            if (IPS_GetVariable($VarID)['VariableCustomProfile'] == $Name) {
+                return;
+            }
+            if (IPS_GetVariable($VarID)['VariableProfile'] == $Name) {
+                return;
+            }
+        }
+        foreach (IPS_GetMediaListByType(MEDIATYPE_CHART) as $mediaID) {
+            $content = json_decode(base64_decode(IPS_GetMediaContent($mediaID)), true);
+            foreach ($content['axes'] as $axis) {
+                if ($axis['profile' === $Name]) {
+                    return;
+                }
+            }
+        }
+        IPS_DeleteVariableProfile($Name);
+    }
+
     private function ValidateConfiguration(): bool
     {
         $result = true;
@@ -788,24 +513,22 @@ class Zeitschaltuhr extends IPSModule
             $this->SendDebug(__FUNCTION__, $text, 0);
             $this->LogMessage('ID ' . $this->InstanceID . ', ' . $text, KL_WARNING);
         }
-        //Maintenance mode
-        $maintenance = $this->CheckMaintenanceMode();
+        //Maintenance
+        $maintenance = $this->CheckMaintenance();
         if ($maintenance) {
             $result = false;
             $status = 104;
         }
-        IPS_SetDisabled($this->InstanceID, $maintenance);
         $this->SetStatus($status);
         return $result;
     }
 
-    private function CheckMaintenanceMode(): bool
+    private function CheckMaintenance(): bool
     {
-        $result = $this->ReadPropertyBoolean('MaintenanceMode');
-        if ($result) {
-            $text = 'Abbruch, der Wartungsmodus ist aktiv!';
-            $this->SendDebug(__FUNCTION__, $text, 0);
-            $this->LogMessage('ID ' . $this->InstanceID . ', ' . $text, KL_WARNING);
+        $result = false;
+        if (!$this->GetValue('Active')) {
+            $this->SendDebug(__FUNCTION__, 'Abbruch, die Instanz ist inaktiv!', 0);
+            $result = true;
         }
         return $result;
     }
@@ -823,10 +546,24 @@ class Zeitschaltuhr extends IPSModule
     private function ToggleState(bool $State): void
     {
         $this->SetValue('SwitchingState', $State);
+        $value = 'false';
+        if ($State) {
+            $value = 'true';
+        }
         //Variable
         $id = $this->ReadPropertyInteger('TargetVariable');
         if ($id != 0 && @IPS_ObjectExists($id)) {
-            RequestAction($id, $State);
+            $commandControl = $this->ReadPropertyInteger('CommandControl');
+            if ($commandControl > 1 && @IPS_ObjectExists($commandControl)) {
+                $commands = [];
+                $commands[] = '@RequestAction(' . $id . ', ' . $value . ');';
+                $this->SendDebug(__FUNCTION__, 'Befehle: ' . json_encode(json_encode($commands)), 0);
+                $scriptText = self::ABLAUFSTEUERUNG_MODULE_PREFIX . '_ExecuteCommands(' . $commandControl . ', ' . json_encode(json_encode($commands)) . ');';
+                $this->SendDebug(__FUNCTION__, 'Ablaufsteuerung: ' . $scriptText, 0);
+                @IPS_RunScriptText($scriptText);
+            } else {
+                @RequestAction($id, $State);
+            }
         }
         $this->SetNextToggleTime();
     }

@@ -1,21 +1,28 @@
 <?php
 
-/** @noinspection PhpUnused */
-
-/*
- * @author      Ulrich Bittner
- * @copyright   (c) 2021
- * @license     CC BY-NC-SA 4.0
- * @see         https://github.com/ubittner/Zeitschaltuhr/tree/main/Zeitschaltuhr
+/**
+ * @project       Zeitschaltuhr/Zeitschaltuhr
+ * @file          ZSU_Sunset.php
+ * @author        Ulrich Bittner
+ * @copyright     2022 Ulrich Bittner
+ * @license       https://creativecommons.org/licenses/by-nc-sa/4.0/ CC BY-NC-SA 4.0
  */
+
+/** @noinspection PhpUnused */
 
 declare(strict_types=1);
 
-trait ZSU_sunset
+trait ZSU_Sunset
 {
+    /**
+     * Executes the sunset action.
+     *
+     * @return void
+     * @throws Exception
+     */
     public function ExecuteSunsetAction(): void
     {
-        if ($this->CheckMaintenanceMode()) {
+        if ($this->CheckMaintenance()) {
             return;
         }
         if (!$this->CheckAutomaticMode()) {
@@ -28,23 +35,29 @@ trait ZSU_sunset
         $id = $this->ReadPropertyInteger('Sunset');
         if ($id != 0 && @IPS_ObjectExists($id)) {
             $this->SendDebug(__FUNCTION__, 'Der Sonnenuntergang hat ausgelöst.', 0);
-            $toggleAction = boolval($this->ReadPropertyInteger('SunsetToggleAction'));
-            $this->ToggleState($toggleAction);
+            $state = boolval($this->ReadPropertyInteger('SunsetToggleAction'));
+            $this->ToggleState($state);
         }
     }
 
     #################### Private
 
+    /**
+     * Checks the sunset.
+     *
+     * @return void
+     * @throws Exception
+     */
     private function CheckSunset(): void
     {
-        if ($this->CheckMaintenanceMode()) {
+        if ($this->CheckMaintenance()) {
             return;
         }
         if (!$this->CheckAutomaticMode()) {
             return;
         }
         if (!$this->ReadPropertyBoolean('UseSunset')) {
-            $this->SendDebug(__FUNCTION__, 'Es wird kein Sonnentuntergang verwendet!', 0);
+            $this->SendDebug(__FUNCTION__, 'Es wird kein Sonnenuntergang verwendet!', 0);
             return;
         }
         $this->SendDebug(__FUNCTION__, 'Es wird geprüft, ob es Sonnenuntergang ist', 0);

@@ -1,21 +1,28 @@
 <?php
 
-/** @noinspection PhpUnused */
-
-/*
- * @author      Ulrich Bittner
- * @copyright   (c) 2021
- * @license     CC BY-NC-SA 4.0
- * @see         https://github.com/ubittner/Zeitschaltuhr/tree/main/Zeitschaltuhr
+/**
+ * @project       Zeitschaltuhr/Zeitschaltuhr
+ * @file          ZSU_ScheduleAction.php
+ * @author        Ulrich Bittner
+ * @copyright     2022 Ulrich Bittner
+ * @license       https://creativecommons.org/licenses/by-nc-sa/4.0/ CC BY-NC-SA 4.0
  */
+
+/** @noinspection PhpUnused */
 
 declare(strict_types=1);
 
-trait ZSU_sunrise
+trait ZSU_Sunrise
 {
+    /**
+     * Executes the sunrise action.
+     *
+     * @return void
+     * @throws Exception
+     */
     public function ExecuteSunriseAction(): void
     {
-        if ($this->CheckMaintenanceMode()) {
+        if ($this->CheckMaintenance()) {
             return;
         }
         if (!$this->CheckAutomaticMode()) {
@@ -28,16 +35,22 @@ trait ZSU_sunrise
         $id = $this->ReadPropertyInteger('Sunrise');
         if ($id != 0 && @IPS_ObjectExists($id)) {
             $this->SendDebug(__FUNCTION__, 'Der Sonnenaufgang hat ausgelöst.', 0);
-            $toggleAction = boolval($this->ReadPropertyInteger('SunriseToggleAction'));
-            $this->ToggleState($toggleAction);
+            $state = boolval($this->ReadPropertyInteger('SunriseToggleAction'));
+            $this->ToggleState($state);
         }
     }
 
     #################### Private
 
+    /**
+     * Checks the sunrise
+     *
+     * @return void
+     * @throws Exception
+     */
     private function CheckSunrise(): void
     {
-        if ($this->CheckMaintenanceMode()) {
+        if ($this->CheckMaintenance()) {
             return;
         }
         if (!$this->CheckAutomaticMode()) {
