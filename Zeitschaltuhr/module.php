@@ -179,6 +179,11 @@ class Zeitschaltuhr extends IPSModule
                 $this->RegisterMessage($id, VM_UPDATE);
             }
         }
+        //Target variable
+        $id = $this->ReadPropertyInteger('TargetVariable');
+        if ($id != 0 && @IPS_ObjectExists($id)) {
+            $this->RegisterReference($id);
+        }
 
         //WebFront options
         IPS_SetHidden($this->GetIDForIdent('Active'), !$this->ReadPropertyBoolean('EnableActive'));
