@@ -25,9 +25,9 @@ class Zeitschaltuhr extends IPSModule
     use ZSU_Sunset;
 
     //Constants
-    private const MODULE_NAME = 'Zeitschaltuhr';
+    private const LIBRARY_GUID = '{60355992-647F-0632-B9F2-01C93B62ED19}';
+    private const MODULE_GUID = '{68424ADC-725A-77E8-F63E-01DA08C6E30F}';
     private const MODULE_PREFIX = 'ZSU';
-    private const MODULE_VERSION = '1.0-2, 27.03.2023';
     private const ABLAUFSTEUERUNG_MODULE_GUID = '{0559B287-1052-A73E-B834-EBD9B62CB938}';
     private const ABLAUFSTEUERUNG_MODULE_PREFIX = 'AST';
 
